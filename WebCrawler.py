@@ -13,7 +13,7 @@ def process_url(url):
     extract = tldextract.extract(url)
     stamp = datetime.datetime.now()
     if extract.domain in processors:
-        return {'status':True, 'date': stamp.strftime("%B %d, %Y, %H:%M:%S"), 'data': processors[extract.domain](url=url).parse_html()}
+        return {'status':True, 'date': stamp.strftime("%B %d, %Y, %H:%M:%S"), 'data': processors[extract.domain](url=url).crawl_procedure()}
     else:
         return {'status':False, 'Error':"URL not recognized" }
           
@@ -26,17 +26,28 @@ class Crawler(object):
         self.url = url
         self.domain = domain
         
-    def filter_product_urls(self, link):
-        return None    
+        self.request = requests.get(self.url)	
+        self.soup = BeautifulSoup(self.request.text)
         
-    def parse_html(self):
+    def filter_product_urls(self, link):
+        return None 
+    def get_product(self):
+        return None
+    def get_image(self):
+        return None
+    def get_price(self):
+        return None
+    def get_description(self):
+        return None                
+           
+    def crawl_procedure(self):
+        self.products = {}
         self.URLS.append(self.url)
         while len(self.URLS) > 0:
             try:
                 self.html = requests.get(self.URLS[0]).content
             except:
                 print self.URLS[0]
-            self.soup = BeautifulSoup(self.html)
             self.links = self.soup.find_all('a', {'href' : True})
             
             self.URLS.pop(0)
@@ -47,9 +58,20 @@ class Crawler(object):
                 if self.product_link and self.product_link not in self.visited:
                     self.URLS.append(self.product_link)
                     self.visited.append(self.product_link)
-        return self.visited        
-                
-                
+                    
+                    self.request = requests.get(self.product_link)	
+                    self.soup = BeautifulSoup(self.request.text)
+                    
+                    self.product = self.get_product(self.soup)
+                    self.image = self.get_image(self.soup)
+                    self.price = self.get_price(self.soup)
+                    self.description = self.get_description(self.soup)
+                    
+                    self.products[self.product_link] = {'product':self.product, 'image':self.image, 'price':self.price, 'description': self.description}
+        return self.products
+        
+             
+
 class WhippingPost(Crawler): 
     
     def filter_product_urls(self, url):
@@ -58,7 +80,20 @@ class WhippingPost(Crawler):
         self.possible_product_link = re.search(r'http://www.whippingpost.com/collections/all/products/\S+', self.absolute_link)
         if self.possible_product_link:
             self.product_link = self.possible_product_link.group()
-        return self.product_link    
+        return self.product_link
+        
+    def get_product(self, link):
+        result = link.find('meta', {'property':'og:title'})['content']
+        return result if result else None
+    def get_image(self, link):
+        result = 'https:'+link.find('meta', {'property':'og:image'})['content']
+        return result if result else None 
+    def get_description(self, link):
+        result = link.find('meta', {'property':'og:description'})['content']
+        return result if result else None    
+    def get_price(self, link):
+        result = link.find('span', {'class':'current_price'}).text.strip()           
+        return result if result else None
             
 processors['whippingpost'] = WhippingPost
 
